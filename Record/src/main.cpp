@@ -1,4 +1,5 @@
 #include "main.h"
+// #include "record_tasks.h"
 
 #define LEFT_FRONT_MOTOR_PORT 12    // Drivetrain motors
 #define LEFT_BACK_MOTOR_PORT 13
@@ -61,64 +62,38 @@ void autonomous() {}
  * task, not resume it from where it left off.
  */
 void opcontrol() {
-	FILE* temp;
-	temp = fopen("/usd/forward.txt", "w");
-	fclose(temp);
-	temp = fopen("/usd/yaw.txt", "w");
-	fclose(temp);
+	// Initialize controller
+	pros::Controller controller(pros::E_CONTROLLER_MASTER);
 
-	// Init chassis controller and V5 controller
-  std::shared_ptr<okapi::ChassisController> chassis = okapi::ChassisControllerBuilder()
-    // Right motors reversed
-    .withMotors(
-      {LEFT_FRONT_MOTOR_PORT, LEFT_BACK_MOTOR_PORT},
-      {-RIGHT_FRONT_MOTOR_PORT, -RIGHT_BACK_MOTOR_PORT}
-    )
-    // Green gears + 2.75" wheel ⌀, 6.5" wheelbase
-    .withDimensions(okapi::AbstractMotor::gearset::green, {{3.5_in, 6.5_in}, okapi::imev5GreenTPR})
-    // Enable odometry
-    .withOdometry()
-    .buildOdometry();
+	// Initialize motors
+	// Note: all motors on right side
+	pros::Motor left_back_wheel (LEFT_BACK_MOTOR_PORT);
+	pros::Motor right_back_wheel (RIGHT_BACK_MOTOR_PORT, true);
+	pros::Motor left_front_wheel (LEFT_FRONT_MOTOR_PORT);
+	pros::Motor right_front_wheel (RIGHT_FRONT_MOTOR_PORT, true);
 
-  okapi::Controller controller;
+	left_back_wheel.set_brake_mode (pros::E_MOTOR_BRAKE_BRAKE);
+	right_back_wheel.set_brake_mode (pros::E_MOTOR_BRAKE_BRAKE);
+	left_front_wheel.set_brake_mode (pros::E_MOTOR_BRAKE_BRAKE);
+	right_front_wheel.set_brake_mode (pros::E_MOTOR_BRAKE_BRAKE);
 
-  // Set brake mode
-  chassis->getModel()->setBrakeMode(okapi::AbstractMotor::brakeMode::hold);
+	// Start tasks
+	// pros::Task motorTask(record_motor_task, (std::shared_ptr<okapi::ChassisController>*) chassis.get(), TASK_PRIORITY_DEFAULT, TASK_STACK_DEPTH_DEFAULT, "motor task");
 
-  // Main loop
-  while (true) {
-    // ----------
-    // Drive
-    // ----------
+	// Main loop
+	while (true) {
+		// Run motors based on joystick input (arcade drive)
+		int power = controller.get_analog(ANALOG_LEFT_Y);
+		int turn = controller.get_analog(ANALOG_LEFT_X);
+		int left = power + turn;
+		int right = power - turn;
 
-    // Arcade drive
-    float y = controller.getAnalog(okapi::ControllerAnalog::leftY);
-    float x = controller.getAnalog(okapi::ControllerAnalog::leftX);
+		left_front_wheel.move(left);
+		left_back_wheel.move(left);
 
-    double forward = y;
-    double yaw = x / 1.5;
+		right_front_wheel.move(right);
+		right_back_wheel.move(right);
 
-    chassis->getModel()->arcade(forward, yaw, 0.15);
-
-		// Record
-		FILE* usd_file_write_forward = fopen("/usd/forward.txt", "a");
-		FILE* usd_file_write_yaw = fopen("/usd/yaw.txt", "a");
-
-		char buf[50];
-
-		sprintf(buf, "%.4f\n", y);
-		fputs(buf, usd_file_write_forward);
-		fclose(usd_file_write_forward);
-
-		sprintf(buf, "%.4f\n", x);
-		fputs(buf, usd_file_write_yaw);
-		fclose(usd_file_write_yaw);
-
-    // ----------
-    // Misc.
-    // ----------
-
-    pros::delay(10);  // Loop delay
-  }
-
+		pros::delay(10);  // Loop delay
+	}
 }
